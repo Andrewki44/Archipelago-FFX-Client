@@ -951,6 +951,8 @@ public static class ArchipelagoData {
         {"zzzz00_54", () => ArchipelagoFFXModule.set_underwater_party()},
         {"zzzz00_73", () => ArchipelagoFFXModule.set_underwater_party()},
         {"zzzz02_83", () => ArchipelagoFFXModule.set_underwater_party()},
+
+        {"sins07_10", () => ArchipelagoFFXModule.set_no_summon_party()},
     };
 
 

@@ -806,6 +806,12 @@ public unsafe partial class ArchipelagoFFXModule : FhModule {
                   ], saveParty, onlyUnlocked);
     }
 
+    public static void set_no_summon_party(bool saveParty = true, bool onlyUnlocked = true) {
+        set_party([ PlySaveId.PC_TIDUS, PlySaveId.PC_WAKKA, PlySaveId.PC_LULU, PlySaveId.PC_YUNA,
+                    PlySaveId.PC_KIMAHRI, PlySaveId.PC_AURON, PlySaveId.PC_RIKKU, PlySaveId.PC_SEYMOUR
+                  ], saveParty, onlyUnlocked);
+    }
+
     public static void set_character_model(int chr_id) {
         AtelStack stack = new AtelStack();
         stack.push_int(chr_id + 1);
