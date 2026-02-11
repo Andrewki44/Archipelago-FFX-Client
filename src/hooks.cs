@@ -1559,6 +1559,12 @@ public unsafe partial class ArchipelagoFFXModule {
                 //set(code_ptr, 0x346A1, atelNOPArray(17));
 
                 break;
+            case "nagi0400":
+                // Don't effect Dark Yojimbo
+                set(code_ptr, 0x44AC, [
+                    .. atelNOPArray(14)
+                    ]);
+                break;
             case "nagi0600":
                 // Send Yojimbo
                 set(code_ptr, [0x261A, 0x2686, 0x28FB, 0x2B20, 0x2D45, 0x2F39], [
@@ -3528,6 +3534,11 @@ public unsafe partial class ArchipelagoFFXModule {
                     ArchipelagoFFXModule.obtain_item(item.id);
                 }
             }
+        }
+
+        // Enable Dark Yojimbo after hiring Yojimbo
+        if (partyMember_id == 14) {
+            save_data->completion_flags_dark_yojimbo.set_bit(0, true);
         }
         return 1;
     }
