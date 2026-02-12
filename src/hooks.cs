@@ -524,14 +524,33 @@ public unsafe partial class ArchipelagoFFXModule {
     //    //}.SelectMany(x => x).ToArray(),
     //    //FhEncoding.Us.to_bytes("{TIME:0}Ready to fight {COLOR:BLUE}Sin{COLOR:WHITE}?\n{CHOICE:0}Yes\n{CHOICE:1}No"),
     //};
-    public struct CustomString {
+
+    public struct ManagedCustomString {
+        public byte[] encoded;
+
+        public ManagedCustomString(ReadOnlySpan<byte> text, FhEncodingFlags encodingFlags = default) {
+
+            int encodedLength = FhEncoding.compute_encode_buffer_size(text, flags: encodingFlags);
+            this.encoded = new byte[encodedLength + 1];
+            int actual_size = FhEncoding.encode(text, encoded, flags: encodingFlags);
+        }
+        public ManagedCustomString(string text, FhEncodingFlags encodingFlags = default) {
+
+            ReadOnlySpan<byte> utf8String = Encoding.UTF8.GetBytes(text);
+
+            int encodedLength = FhEncoding.compute_encode_buffer_size(utf8String, flags: encodingFlags);
+            this.encoded = new byte[encodedLength + 1];
+            int actual_size = FhEncoding.encode(utf8String, encoded, flags: encodingFlags);
+        }
+    }
+    public struct NativeCustomString {
         public byte* encoded;
         public int encodedLength;
         public string decoded;
         public int choices;
         public int flags;
 
-        public CustomString(ReadOnlySpan<byte> text, int choices = 0, int flags = 0, FhEncodingFlags encodingFlags = default) {
+        public NativeCustomString(ReadOnlySpan<byte> text, int choices = 0, int flags = 0, FhEncodingFlags encodingFlags = default) {
             this.choices = choices;
             this.flags = flags;
 
@@ -542,7 +561,7 @@ public unsafe partial class ArchipelagoFFXModule {
             int actual_size = FhEncoding.encode(text, new Span<byte>(encoded, encodedLength), flags: encodingFlags);
         }
 
-        public CustomString(string text, int choices = 0, int flags = 0, FhEncodingFlags encodingFlags = default) {
+        public NativeCustomString(string text, int choices = 0, int flags = 0, FhEncodingFlags encodingFlags = default) {
             this.choices = choices;
             this.flags = flags;
             this.decoded = text;
@@ -570,14 +589,14 @@ public unsafe partial class ArchipelagoFFXModule {
     //private const byte OL_PURPLE = 0xA1;
     //private const byte OL_CYAN   = 0xB1;
 
-    public static readonly CustomString[] customStrings = [
-        new CustomString("{TIME:00}Ready to fight {COLOR:88}Sin{COLOR:41}?{LF}{CHOICE:00}Yes{LF}{CHOICE:01}No"u8, 2, 0),
-        new CustomString("{TIME:00}Ready to fight {COLOR:88}Jecht{COLOR:41}?{LF}{CHOICE:00}Yes{LF}{CHOICE:01}No"u8, 2, 0),
-        new CustomString("{TIME:00}Locked"u8, 0, 0),
-        new CustomString("{TIME:00}{CHOICE:00}Save{LF}{CHOICE:01}Board airship{LF}{CHOICE:02}Play blitzball{LF}{CHOICE:03}Cancel"u8, 4, 0),
-        new CustomString("{TIME:00}The {MACRO:06:42} are not at full{LF}strength. You need more members{LF}to participate in blitzball."u8, 0, 0),
-        new CustomString("{TIME:00}Skip ending?{LF}{CHOICE:00}Yes{LF}{CHOICE:01}No"u8, 2, 0),
-        new CustomString("{TIME:00}Other regions must be accessed from the Airship Menu"u8, 0, 0),
+    public static readonly NativeCustomString[] customStrings = [
+        new NativeCustomString("{TIME:00}Ready to fight {COLOR:88}Sin{COLOR:41}?{LF}{CHOICE:00}Yes{LF}{CHOICE:01}No"u8, 2, 0),
+        new NativeCustomString("{TIME:00}Ready to fight {COLOR:88}Jecht{COLOR:41}?{LF}{CHOICE:00}Yes{LF}{CHOICE:01}No"u8, 2, 0),
+        new NativeCustomString("{TIME:00}Locked"u8, 0, 0),
+        new NativeCustomString("{TIME:00}{CHOICE:00}Save{LF}{CHOICE:01}Board airship{LF}{CHOICE:02}Play blitzball{LF}{CHOICE:03}Cancel"u8, 4, 0),
+        new NativeCustomString("{TIME:00}The {MACRO:06:42} are not at full{LF}strength. You need more members{LF}to participate in blitzball."u8, 0, 0),
+        new NativeCustomString("{TIME:00}Skip ending?{LF}{CHOICE:00}Yes{LF}{CHOICE:01}No"u8, 2, 0),
+        new NativeCustomString("{TIME:00}Other regions must be accessed from the Airship Menu"u8, 0, 0),
     ];
     //public static readonly byte[][] rawCustomStrings = [
     //    "{TIME:0}Ready to fight {COLOR:BLUE}Sin{COLOR:WHITE}?\n{CHOICE:0}Yes\n{CHOICE:1}No"u8.ToArray()
@@ -1162,17 +1181,26 @@ public unsafe partial class ArchipelagoFFXModule {
         {"swin0000", [(0x8981,  5)] }, // Kiyuri
     };
 
+    private static readonly Dictionary<string, (uint offset, ushort southNorth)[]> event_to_lightning_dodging_offsets = new(){
+        {"kami0000", [(0x3848, 0)] },
+        {"kami0300", [(0x685F, 1)] },
+    };
+
     private static Dictionary<(int, int), uint> originalEntryPoints = new();
     private static string current_event_name = "";
     private static void h_AtelEventSetUp(int event_id) {
         _AtelEventSetUp.orig_fptr(event_id);
 
-        foreach (var handle in cached_strings) {
-            handle.Free();
+        foreach (NativeCustomString customString in cached_strings) {
+            customString.Free();
         }
         cached_strings.Clear();
 
         originalEntryPoints.Clear();
+
+        foreach ((string key, CustomStringDrawInfo drawInfo) in customStringDrawInfos) {
+            if (!drawInfo.persistent) customStringDrawInfos.Remove(key);
+        }
 
         string event_name = Marshal.PtrToStringAnsi((nint)get_event_name((uint)event_id))!;
         logger.Debug($"atel_event_setup: {event_name}");
@@ -1213,7 +1241,7 @@ public unsafe partial class ArchipelagoFFXModule {
                     .. atelNOPArray(15),
                     AtelOp.CALLPOPA.build((ushort)CustomCallTarget.SHOW_AIRSHIP_DESTINATIONS),
                     ]);
-                
+
 
                 // Hide airship destinations
                 set(code_ptr, 0x3765, [
@@ -1249,7 +1277,7 @@ public unsafe partial class ArchipelagoFFXModule {
                     AtelOp.CALLPOPA.build((ushort)CustomCallTarget.HIDE_CURRENT_AIRSHIP_LOCATION),
                     ]);
 
-                set(code_ptr, 
+                set(code_ptr,
                     [
                         0x1CB8 + 3, 0x1CDF + 3, 0x1D06 + 3, 0x1D2D + 3,
                         0x1D54 + 3, 0x1D7B + 3, 0x1DA2 + 3, 0x1DC9 + 3,
@@ -1262,7 +1290,7 @@ public unsafe partial class ArchipelagoFFXModule {
                     );
 
                 set(code_ptr, 0x434E, AtelOp.PUSHII.build(12)); // Change destination 26 switch case to 12
-                
+
                 set(code_ptr, 0x4028, atelNOPArray(13));         // Skip setting GameMoment for destination 16
                 set(code_ptr, 0x4118, AtelOp.JMP.build(0x0141)); // Skip setting GameMoment for destination 18
 
@@ -1609,6 +1637,18 @@ public unsafe partial class ArchipelagoFFXModule {
             }
         }
 
+        //Lightning Dodging
+        if (event_to_lightning_dodging_offsets.TryGetValue(event_name, out var lightning_offset)) {
+            // kami0000 - 0x3848 | kami0300 - 0x685F
+            foreach ((uint offset, ushort southNorth) in lightning_offset) {
+                set(code_ptr, offset, [
+                    AtelOp.PUSHII       .build(southNorth),
+                    AtelOp.CALL         .build((ushort)CustomCallTarget.LIGHTNING_DODGING),
+                    AtelOp.NOP          .build(),
+                    ]);
+            }
+        }
+
         // Celestial weapon locations
         if (event_to_celestial_offsets.TryGetValue(event_name, out var celestial_offsets)) {
             // Remove CelestialMirrorObtained check
@@ -1629,7 +1669,7 @@ public unsafe partial class ArchipelagoFFXModule {
                     AtelOp.NOP      .build(),
                     ]);
             }
-            {  
+            {
                 uint? offset = null;
                 if (event_name == "bika0000") offset = 0x15FC;
                 if (event_name == "cdsp0000") offset = 0xC62F;
@@ -1936,7 +1976,7 @@ public unsafe partial class ArchipelagoFFXModule {
             if (FFXArchipelagoClient.sendLocation(treasure_id, ArchipelagoLocationType.Treasure)) {
                 obtain_item(item.id);
 
-                CustomString name = new CustomString(item.id != 0 ? item.name : $"{item.name} to {item.player}", encodingFlags: FhEncodingFlags.IGNORE_EXPRESSIONS);
+                NativeCustomString name = new NativeCustomString(item.id != 0 ? item.name : $"{item.name} to {item.player}", encodingFlags: FhEncodingFlags.IGNORE_EXPRESSIONS);
                 //CustomString name = new CustomString(item.name, encodingFlags: FhEncodingFlags.IGNORE_EXPRESSIONS);
                 logger.Info(item.name);
 
@@ -1945,7 +1985,7 @@ public unsafe partial class ArchipelagoFFXModule {
                 if (item.id != 0) {
                     message_text = _FUN_008bda20(0x4018); // "Obtained %0!"
                 } else {
-                    CustomString sent_text = new CustomString("Sent {VAR:00}!");
+                    NativeCustomString sent_text = new NativeCustomString("Sent {VAR:00}!");
                     //CustomString sent_text = new CustomString("Sent {VAR:00} to {VAR:01}!");
                     cached_strings.Add(sent_text);
                     message_text = sent_text.encoded;
@@ -1955,7 +1995,7 @@ public unsafe partial class ArchipelagoFFXModule {
                     //_FUN_008b8930(window_id, 1, (int)player_name.encoded);
                 }
             } else {
-                CustomString sent_text = new CustomString("Already received this item!");
+                NativeCustomString sent_text = new NativeCustomString("Already received this item!");
                 cached_strings.Add(sent_text);
                 message_text = sent_text.encoded;
             }
@@ -2148,21 +2188,22 @@ public unsafe partial class ArchipelagoFFXModule {
     }
     private static void update_region_state(int map, int entrance) {
         logger.Info($"Update region state");
-        if (skip_state_updates) {
-            return;
-        }
 
         // Update region state
         if (current_region != RegionEnum.None && region_states.TryGetValue(current_region, out ArchipelagoData.ArchipelagoRegion? current_state)) {
             current_state = region_states[current_region];
-            current_state.room_id = (ushort)map;
-            current_state.entrance = (ushort)entrance;
-            current_state.story_progress = save_data->story_progress;
 
             for (int i = 0; i < current_state.savedata.Length; i++) {
                 ref var data = ref current_state.savedata[i];
                 new Span<byte>((byte*)((int)save_data + data.offset), data.size).CopyTo(data.bytes);
             }
+
+            if (skip_state_updates) {
+                return;
+            }
+            current_state.room_id = (ushort)map;
+            current_state.entrance = (ushort)entrance;
+            current_state.story_progress = save_data->story_progress;
         }
     }
 
@@ -2513,10 +2554,24 @@ public unsafe partial class ArchipelagoFFXModule {
         if (initialized_monsters.Add(mon->chr_id)) {
             MonStats* stats = (MonStats*)mon->ptr_base_stats;
             //logger.Debug($"{mon->chr_id & 0xFFF} stats:  stats=\n{stats->ToString()}");
-            if ((mon->chr_id & 0xFFF) == 101) {
-                // Tros
+            if (
+                (mon->chr_id & 0xFFF) == 041 ||  // Sahagin
+                (mon->chr_id & 0xFFF) == 042 ||  // Sahagin
+                (mon->chr_id & 0xFFF) == 043 ||  // Sahagin
+                (mon->chr_id & 0xFFF) == 068 ||  // Piranha
+                (mon->chr_id & 0xFFF) == 069 ||  // Piranha
+                (mon->chr_id & 0xFFF) == 070 ||  // Piranha   
+                (mon->chr_id & 0xFFF) == 101 ||  // Tros
+                (mon->chr_id & 0xFFF) == 155 ||  // Sahagin
+                (mon->chr_id & 0xFFF) == 156 ||  // Sahagin Chief
+                (mon->chr_id & 0xFFF) == 157 ||  // Garuda
+                (mon->chr_id & 0xFFF) == 230 ||  // Garuda
+                (mon->chr_id & 0xFFF) == 231 ||  // Dingo
+                (mon->chr_id & 0xFFF) == 232 ||  // Water Flan
+                (mon->chr_id & 0xFFF) == 233 ||  // Condor
+                (mon->chr_id & 0xFFF) == 234     // Ragora - Lancet Tutorial
+               )
                 stats->monster_arena_idx = 0xFF;
-            }
 
             //ChrLoot* loot = (ChrLoot*)(((int*)mon->ptr_mon_wep_bin)[5] + mon->ptr_mon_wep_bin);
             //
@@ -3270,9 +3325,9 @@ public unsafe partial class ArchipelagoFFXModule {
     // Unsure if there are side effects
     public static void h_LocalizationManager_Initialize(FFXLocalizationManager* localizationManager) {
         _LocalizationManager_Initialize.orig_fptr(localizationManager);
-        if (TextLanguage.HasValue) { 
+        if (TextLanguage.HasValue) {
             logger.Debug($"Text: {TextLanguage.Value}");
-            localizationManager->text = (int)TextLanguage; 
+            localizationManager->text = (int)TextLanguage;
         }
         if (VoiceLanguage.HasValue) {
             logger.Debug($"Voice: {VoiceLanguage.Value}");
@@ -3422,6 +3477,7 @@ public unsafe partial class ArchipelagoFFXModule {
         IS_GOAL_UNLOCKED,
         REPLACE_ENTRY_POINT,
         RESTORE_ENTRY_POINT,
+        LIGHTNING_DODGING,
     }
 
     static AtelCallTarget[] customNameSpace = {
@@ -3453,6 +3509,7 @@ public unsafe partial class ArchipelagoFFXModule {
         new() { ret_int_func = (nint)(delegate* unmanaged[Cdecl]<AtelBasicWorker*, int*, AtelStack*, int>)(&CT_RetInt_IsGoalUnlocked)},
         new() { ret_int_func = (nint)(delegate* unmanaged[Cdecl]<AtelBasicWorker*, int*, AtelStack*, int>)(&CT_RetInt_ReplaceEntryPoint)},
         new() { ret_int_func = (nint)(delegate* unmanaged[Cdecl]<AtelBasicWorker*, int*, AtelStack*, int>)(&CT_RetInt_RestoreEntryPoint)},
+        new() { ret_int_func = (nint)(delegate* unmanaged[Cdecl]<AtelBasicWorker*, int*, AtelStack*, int>)(&CT_RetInt_LightningDodging)},
     };
     static GCHandle customNameSpaceHandle = GCHandle.Alloc(customNameSpace, GCHandleType.Pinned);
 
@@ -3951,5 +4008,44 @@ public unsafe partial class ArchipelagoFFXModule {
         }
         return 1;
     }
-}
 
+    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static int CT_RetInt_LightningDodging(AtelBasicWorker* work, int* storage, AtelStack* atelStack) {
+        int southNorth = atelStack->pop_int();
+        ushort highestDodged = save_data->lightning_dodging_highest_consecutive_dodges;
+        byte* table = (byte*)work->table_event_data;
+        byte* dodged;
+        byte* streak;
+
+        // Get relevant eventVars per room
+        if (southNorth == 0) {
+            dodged = &table[0x0007];
+            streak = &table[0x0012];
+        } else {
+            dodged = &table[0x0009];
+            streak = &table[0x000E];
+        }
+
+        // Free & Remove existing strings
+
+        // Did the player dodge?
+        int current;
+        if (*dodged == 0)
+            current = 0;
+        else
+            current = *streak + 1;
+
+        string currentString = $"Dodged: {current}";
+        customStringDrawInfos["Lightning Streak"] = new CustomStringDrawInfo(new ManagedCustomString(currentString), new(40f, 140f), 0.5f);
+        logger.Info($"Lightning Dodged: {current}");
+
+        if (*streak > save_data->lightning_dodging_highest_consecutive_dodges)
+            highestDodged = *streak;
+
+        string highestString = $"Highest: {highestDodged}";
+        customStringDrawInfos["Lightning Highest Streak"] = new CustomStringDrawInfo(new ManagedCustomString(highestString), new(40f, 150f), 0.5f);
+        logger.Info($"Highest Consecutive Dodged: {highestDodged}");
+
+        return *dodged == 1 ? 1 : 0;
+    }
+}

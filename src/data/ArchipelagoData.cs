@@ -844,7 +844,7 @@ public static class ArchipelagoData {
         //0x426F,
     ];
 
-    public static ArchipelagoFFXModule.CustomString[] airship_destination_names = [
+    public static ArchipelagoFFXModule.ManagedCustomString[] airship_destination_names = [
         new(""u8),
         new("Baaj Temple"u8),
         new("Besaid Island"u8),
@@ -930,7 +930,7 @@ public static class ArchipelagoData {
         {"bika00_10", () =>  FFXArchipelagoClient.current_session?.DataStorage[Scope.Slot, "FFX_LOGIC_ZU"] = true },
         {"mihn02_00", () => {
             int boss_id = 8; // Chocobo Eater
-            if (!FFXArchipelagoClient.local_checked_locations.Contains(boss_id | (long)FFXArchipelagoClient.ArchipelagoLocationType.PartyMember)) {
+            if (!FFXArchipelagoClient.local_checked_locations.Contains(boss_id | (long)FFXArchipelagoClient.ArchipelagoLocationType.Boss)) {
                 if (ArchipelagoFFXModule.item_locations.party_member.TryGetValue(boss_id, out var item)) {
                     if (FFXArchipelagoClient.sendLocation(boss_id, FFXArchipelagoClient.ArchipelagoLocationType.Boss)) {
                         ArchipelagoFFXModule.obtain_item(item.id);
