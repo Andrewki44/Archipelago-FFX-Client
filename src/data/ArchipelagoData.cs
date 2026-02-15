@@ -692,18 +692,17 @@ public static class ArchipelagoData {
             } } },
         {RegionEnum.Macalania, new(){ story_progress = 1400, room_id = 110, entrance = 0, airship_destination_index = 11,
             story_checks = {
-                { 1430, new() {check_delegate = (r) => {
-                    // Send and obtain Jecht Sphere location if skipped by CSR
-                    int treasure_id = 177;
-                    if (!FFXArchipelagoClient.local_checked_locations.Contains(treasure_id | (long)FFXArchipelagoClient.ArchipelagoLocationType.Treasure)) {
-                        if (ArchipelagoFFXModule.item_locations.treasure.TryGetValue(treasure_id, out var item)) {
-                            if (FFXArchipelagoClient.sendLocation(treasure_id, FFXArchipelagoClient.ArchipelagoLocationType.Treasure)) {
+                { 1470, new() {check_delegate = (r) => {
+                    ArchipelagoFFXModule.logger.Info("Macalania Woods visit complete");
+                    int other_id = 27;
+                    if (!FFXArchipelagoClient.local_checked_locations.Contains(other_id | (long)FFXArchipelagoClient.ArchipelagoLocationType.Other)) {
+                        if (ArchipelagoFFXModule.item_locations.treasure.TryGetValue(other_id, out var item)) {
+                            if (FFXArchipelagoClient.sendLocation(other_id, FFXArchipelagoClient.ArchipelagoLocationType.Other)) {
                                 ArchipelagoFFXModule.obtain_item(item.id);
                             }
                         }
                     }
                 } } },
-                { 1470, new() {check_delegate = (r) => {ArchipelagoFFXModule.logger.Info("Macalania Woods visit complete"); } } },
                 { 1530, new() {check_delegate = (r) => {
                     int treasure_id = 85;
                     if (!FFXArchipelagoClient.local_checked_locations.Contains(treasure_id | (long)FFXArchipelagoClient.ArchipelagoLocationType.Treasure)) {
